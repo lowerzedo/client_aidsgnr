@@ -6,6 +6,8 @@ import { Upload, X } from "lucide-react";
 const PhotoUpload = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [layoutImage, setLayoutImage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -22,25 +24,31 @@ const PhotoUpload = () => {
 
   const handleUpload = async () => {
     if (selectedFiles.length === 0) {
-      alert("Please select at least one photo to upload.");
+      setError("Please select at least one photo to upload.");
       return;
     }
 
     setUploading(true);
+    setError(null);
     const formData = new FormData();
-    selectedFiles.forEach((file, index) => {
-      formData.append(`photo${index + 1}`, file);
-    });
+    formData.append("image", selectedFiles[0]); // Send only the first image
 
     try {
-      await axios.post("/api/upload", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      alert("Photos uploaded successfully!");
-      setSelectedFiles([]);
+      const response = await axios.post(
+        "http://127.0.0.1:5000/ai/process_image",
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        }
+      );
+      if (response.data && response.data.layout_image) {
+        setLayoutImage(`data:image/png;base64,${response.data.layout_image}`);
+      } else {
+        setError("Invalid response from server.");
+      }
     } catch (error) {
-      console.error("Error uploading photos:", error);
-      alert("Error uploading photos. Please try again.");
+      console.error("Error uploading photo:", error);
+      setError("Error processing image. Please try again.");
     } finally {
       setUploading(false);
     }
@@ -48,8 +56,8 @@ const PhotoUpload = () => {
 
   return (
     <div className="max-w-2xl mx-auto mt-10 p-8 bg-white rounded-lg shadow-md">
-      <h1 className="text-3xl font-semibold mb-6 text-center text-gray-400">
-        AI Room Layout
+      <h1 className="text-3xl font-semibold text-gray-400  mb-6 text-center">
+        Photo Upload
       </h1>
       <div className="mb-6">
         <label
@@ -63,7 +71,7 @@ const PhotoUpload = () => {
             htmlFor="photo-upload"
             className="flex flex-col items-center justify-center w-full h-80 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100"
           >
-            <div className="flex flex-col items-center justify-center pt-5 pb-6 pl-4 pr-4">
+            <div className="flex flex-col items-center justify-center pt-5 pb-6">
               <Upload className="w-16 h-16 mb-4 text-gray-400" />
               <p className="mb-2 text-xl text-gray-500">
                 <span className="font-semibold">Click to upload</span> or drag
@@ -118,8 +126,21 @@ const PhotoUpload = () => {
         disabled={uploading || selectedFiles.length === 0}
         className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:shadow-outline disabled:opacity-50 text-lg transition-colors"
       >
-        {uploading ? "Uploading..." : "Upload Photos"}
+        {uploading ? "Processing..." : "Generate Layout"}
       </button>
+      {error && <p className="mt-4 text-red-500">{error}</p>}
+      {layoutImage && (
+        <div className="mt-6">
+          <h2 className="text-xl font-semibold text-gray-400 mb-2">
+            Generated Layout:
+          </h2>
+          <img
+            src={layoutImage}
+            alt="Generated Room Layout"
+            className="w-full rounded-lg shadow-md"
+          />
+        </div>
+      )}
     </div>
   );
 };
