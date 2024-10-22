@@ -31,24 +31,54 @@ const PhotoUpload = () => {
     setUploading(true);
     setError(null);
     const formData = new FormData();
-    formData.append("image", selectedFiles[0]); // Send only the first image
+
+    // Append all selected files to the FormData
+    selectedFiles.forEach((file) => {
+      formData.append("image", file);
+    });
 
     try {
       const response = await axios.post(
         "http://127.0.0.1:5000/ai/process_image",
         formData,
         {
-          headers: { "Content-Type": "multipart/form-data" },
+          headers: { 
+            "Content-Type": "multipart/form-data",
+          },
+          // Add these options for better error handling and CORS support
+          withCredentials: false,
+          timeout: 30000, // 30 second timeout
         }
       );
+
+      if (response.data && response.data.error) {
+        throw new Error(response.data.error);
+      }
+
       if (response.data && response.data.layout_image) {
         setLayoutImage(`data:image/png;base64,${response.data.layout_image}`);
       } else {
-        setError("Invalid response from server.");
+        throw new Error("Invalid response format from server");
       }
     } catch (error) {
-      console.error("Error uploading photo:", error);
-      setError("Error processing image. Please try again.");
+      console.error("Error uploading photos:", error);
+      let errorMessage = "Error processing images. Please try again.";
+      
+      if (axios.isAxiosError(error)) {
+        if (error.code === "ECONNABORTED") {
+          errorMessage = "Request timed out. Please try again.";
+        } else if (error.response) {
+          // Server returned an error response
+          errorMessage = error.response.data?.error || error.response.statusText;
+        } else if (error.request) {
+          // Request was made but no response received
+          errorMessage = "Unable to reach the server. Please check your connection.";
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setUploading(false);
     }
@@ -128,7 +158,11 @@ const PhotoUpload = () => {
       >
         {uploading ? "Processing..." : "Generate Layout"}
       </button>
-      {error && <p className="mt-4 text-red-500">{error}</p>}
+      {error && (
+        <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+          {error}
+        </div>
+      )}
       {layoutImage && (
         <div className="mt-6">
           <h2 className="text-xl font-semibold text-gray-400 mb-2">
